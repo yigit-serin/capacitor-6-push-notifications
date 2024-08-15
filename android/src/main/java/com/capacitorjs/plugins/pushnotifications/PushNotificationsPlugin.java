@@ -2,14 +2,17 @@ package com.capacitorjs.plugins.pushnotifications;
 
 import android.Manifest;
 import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.service.notification.StatusBarNotification;
 import com.getcapacitor.*;
 import com.getcapacitor.annotation.CapacitorPlugin;
@@ -29,7 +32,10 @@ import org.json.JSONObject;
 )
 public class PushNotificationsPlugin extends Plugin {
 
-    static final String PUSH_NOTIFICATIONS = "receive";
+  public static final String FOREGROUND_NOTIFICATION_CHANNEL_ID = "PushDefaultForeground";
+
+
+  static final String PUSH_NOTIFICATIONS = "receive";
 
     public static Bridge staticBridge = null;
     public static RemoteMessage lastMessage = null;
@@ -51,6 +57,7 @@ public class PushNotificationsPlugin extends Plugin {
         }
 
         notificationChannelManager = new NotificationChannelManager(getActivity(), notificationManager, getConfig());
+     createForegroundNotificationChannel();
     }
 
     @Override
@@ -274,13 +281,15 @@ public class PushNotificationsPlugin extends Plugin {
                     if (bundle != null) {
                         NotificationParams params = new NotificationParams(remoteMessage.toIntent().getExtras());
 
-                        String channelId = CommonNotificationBuilder.getOrCreateChannel(
-                            getContext(),
-                            params.getNotificationChannelId(),
-                            bundle
-                        );
+//                        String channelId = CommonNotificationBuilder.getOrCreateChannel(
+//                            getContext(),
+//                            params.getNotificationChannelId(),
+//                            bundle
+//                        );
 
-                        CommonNotificationBuilder.DisplayNotificationInfo notificationInfo = CommonNotificationBuilder.createNotificationInfo(
+                      String channelId = FOREGROUND_NOTIFICATION_CHANNEL_ID;
+
+                      CommonNotificationBuilder.DisplayNotificationInfo notificationInfo = CommonNotificationBuilder.createNotificationInfo(
                             getContext(),
                             getContext(),
                             params,
@@ -333,4 +342,32 @@ public class PushNotificationsPlugin extends Plugin {
             return null;
         }
     }
+
+  public void createForegroundNotificationChannel() {
+    // Create the NotificationChannel only if presentationOptions is defined
+    // Because the channel can't be changed after creation
+    String[] presentation = getConfig().getArray("presentationOptions");
+    if (presentation != null) {
+      // And only on API 26+ because the NotificationChannel class
+      // is new and not in the support library
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        CharSequence name = "Push Notifications Foreground";
+        String description = "Push notifications in foreground";
+        int importance = NotificationManager.IMPORTANCE_HIGH;
+        NotificationChannel channel = new NotificationChannel(FOREGROUND_NOTIFICATION_CHANNEL_ID, name, importance);
+        channel.setDescription(description);
+       if (Arrays.asList(presentation).contains("sound")) {
+         AudioAttributes audioAttributes = new AudioAttributes.Builder()
+           .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+           .setUsage(AudioAttributes.USAGE_ALARM)
+           .build();
+         channel.setSound(Settings.System.DEFAULT_NOTIFICATION_URI, audioAttributes);
+       }
+        // Register the channel with the system; you can't change the importance
+        // or other notification behaviors after this
+        android.app.NotificationManager notificationManager = getContext().getSystemService(android.app.NotificationManager.class);
+        notificationManager.createNotificationChannel(channel);
+      }
+    }
+  }
 }
